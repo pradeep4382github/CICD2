@@ -1,0 +1,54 @@
+name: StudentManagement API CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test-publish:
+    name: Build, Test, and Publish
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore CICD2.sln
+
+      - name: Build solution
+        run: msbuild CICD2.sln /p:Configuration=Release
+
+      - name: Run MSTest
+        shell: powershell
+        run: |
+          $testDll = Get-ChildItem -Path . -Recurse -Filter "UnitTestProject1.dll" |
+            Where-Object { $_.FullName -like "*\bin\Release\*" } |
+            Select-Object -First 1
+
+          if (-not $testDll) {
+            Write-Error "UnitTestProject1.dll not found"
+            exit 1
+          }
+
+          $vstest = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
+
+          & $vstest $testDll.FullName
+
+      - name: Publish WebApplication1
+        run: |
+          msbuild WebApplication1\WebApplication1.csproj /p:Configuration=Release /p:DeployOnBuild=true /p:WebPublishMethod=FileSystem /p:publishUrl="${{ github.workspace }}\publish"
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebApplication1-publish
+          path: publish
