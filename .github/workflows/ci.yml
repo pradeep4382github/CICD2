@@ -1,47 +1,73 @@
+```yaml
 name: StudentManagement API CI
+
 on:
   # Run CI when code is pushed to main or any feature branch
   push:
     branches:
       - main
-      - feature/**
-  
+      - 'feature/**'
+
   # Run CI when a pull request is created or updated for main
   pull_request:
     branches:
       - main
-# A job is a group of steps. its internal key name is: build-test-publish
-# display name is Build, Test, and Publish which is visible to user
-# it will run on a machine which is a Linux machine ubuntu
+
 jobs:
   build-test-publish:
     name: Build, Test, and Publish
-    runs-on: ubuntu-latest
-    # steps are the works or tasks done inside a job
+
+    # .NET Framework 4.5 requires Windows
+    runs-on: windows-2022
+
     steps:
-      # Step 1: Download the repository code 
+      # Step 1: Download the repository code
       - name: Checkout source code
         uses: actions/checkout@v5
-      # Step 2: Install .NET 4.5 SDK
-      - name: Setup .NET 4.5 SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '4..5.x'
+
+      # Step 2: Setup MSBuild
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       # Step 3: Restore NuGet packages
-      - name: Restore dependencies
-        run: dotnet restore CICD2.sln
+      - name: Restore NuGet packages
+        run: nuget restore CICD2.sln
+
       # Step 4: Build the solution in Release mode
       - name: Build solution
-        run: dotnet build CICD2.sln --configuration Release --no-restore
-      # Step 5: Run unit tests
-      - name: Run tests
-        run: dotnet test CICD2.sln --configuration Release --no-build --verbosity normal
-      # Step 6: Publish the API project
-      - name: Publish Web API
-        run: dotnet publish CICD2/WebApplication1.csproj --configuration Release --output ./publish --no-build
+        run: msbuild CICD2.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+      # Step 5: Run MSTest unit tests
+      - name: Run MSTest unit tests
+        run: |
+          $testAssembly = Get-ChildItem -Path . -Recurse -Filter "UnitTestProject1.dll" |
+            Where-Object { $_.FullName -match "\\bin\\Release\\" } |
+            Select-Object -First 1
+
+          if ($null -eq $testAssembly) {
+            Write-Error "UnitTestProject1.dll was not found."
+            exit 1
+          }
+
+          Write-Host "Running tests from: $($testAssembly.FullName)"
+
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe" `
+            $testAssembly.FullName
+
+      # Step 6: Publish the Web Application
+      - name: Publish WebApplication1
+        run: |
+          msbuild WebApplication1/WebApplication1.csproj `
+            /p:Configuration=Release `
+            /p:DeployOnBuild=true `
+            /p:WebPublishMethod=FileSystem `
+            /p:DeleteExistingFiles=true `
+            /p:publishUrl="${{ github.workspace }}\publish"
+
       # Step 7: Store the publish output as an artifact
       - name: Upload publish artifact
         uses: actions/upload-artifact@v6
         with:
-          name: CICD2-publish
+          name: WebApplication1-publish
           path: ./publish
+```
