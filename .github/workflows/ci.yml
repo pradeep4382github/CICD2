@@ -1,14 +1,11 @@
-```yaml
 name: StudentManagement API CI
 
 on:
-  # Run CI when code is pushed to main or any feature branch
   push:
     branches:
       - main
       - 'feature/**'
 
-  # Run CI when a pull request is created or updated for main
   pull_request:
     branches:
       - main
@@ -16,29 +13,23 @@ on:
 jobs:
   build-test-publish:
     name: Build, Test, and Publish
-
-    # .NET Framework 4.5 requires Windows
     runs-on: windows-2022
 
     steps:
-      # Step 1: Download the repository code
       - name: Checkout source code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      # Step 2: Setup MSBuild
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # Step 3: Restore NuGet packages
       - name: Restore NuGet packages
         run: nuget restore CICD2.sln
 
-      # Step 4: Build the solution in Release mode
       - name: Build solution
         run: msbuild CICD2.sln /p:Configuration=Release /p:Platform="Any CPU"
 
-      # Step 5: Run MSTest unit tests
       - name: Run MSTest unit tests
+        shell: powershell
         run: |
           $testAssembly = Get-ChildItem -Path . -Recurse -Filter "UnitTestProject1.dll" |
             Where-Object { $_.FullName -match "\\bin\\Release\\" } |
@@ -51,23 +42,19 @@ jobs:
 
           Write-Host "Running tests from: $($testAssembly.FullName)"
 
-          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe" `
-            $testAssembly.FullName
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe" $testAssembly.FullName
 
-      # Step 6: Publish the Web Application
       - name: Publish WebApplication1
         run: |
-          msbuild WebApplication1/WebApplication1.csproj `
+          msbuild WebApplication1\WebApplication1.csproj `
             /p:Configuration=Release `
             /p:DeployOnBuild=true `
             /p:WebPublishMethod=FileSystem `
             /p:DeleteExistingFiles=true `
             /p:publishUrl="${{ github.workspace }}\publish"
 
-      # Step 7: Store the publish output as an artifact
       - name: Upload publish artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: WebApplication1-publish
           path: ./publish
-```
